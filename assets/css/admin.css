@@ -1,0 +1,231 @@
+/**
+ * Admin styles for Author Profile Updater
+ */
+
+.apu-admin-page {
+    max-width: 900px;
+}
+
+.apu-description {
+    margin-bottom: 20px;
+}
+
+.apu-card {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+    margin-bottom: 20px;
+}
+
+.apu-card-header {
+    border-bottom: 1px solid #ccd0d4;
+    padding: 15px 20px;
+}
+
+.apu-card-header h2 {
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.4;
+}
+
+.apu-card-body {
+    padding: 20px;
+}
+
+.apu-card-footer {
+    border-top: 1px solid #ccd0d4;
+    padding: 10px 20px;
+    background: #f9f9f9;
+}
+
+/* Specific User Section */
+.apu-specific-user-section {
+    margin-bottom: 20px;
+}
+
+.apu-specific-user-form {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.apu-form-row {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+}
+
+.apu-form-row:last-child {
+    margin-bottom: 0;
+}
+
+.apu-form-row label {
+    display: inline-block;
+    min-width: 120px;
+    margin-right: 10px;
+    font-weight: 600;
+}
+
+.apu-checkbox-description {
+    color: #666;
+    font-style: italic;
+    margin-left: 5px;
+    font-size: 0.9em;
+}
+
+.apu-specific-result {
+    padding: 10px;
+    border-left: 4px solid #2271b1;
+    background: #f0f6fc;
+    display: none;
+}
+
+.apu-specific-result.apu-error {
+    border-left-color: #d63638;
+    background: #fcf0f1;
+}
+
+.apu-specific-result.apu-success {
+    border-left-color: #00a32a;
+    background: #f0fcf0;
+}
+
+.apu-divider {
+    margin: 20px 0;
+    border: 0;
+    border-top: 1px solid #e5e5e5;
+}
+
+/* Stats Section */
+.apu-stats {
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.apu-stat-item {
+    flex: 1;
+    min-width: 150px;
+    margin-bottom: 10px;
+    padding: 10px;
+    background: #f9f9f9;
+    border-radius: 4px;
+    margin-right: 10px;
+}
+
+.apu-stat-item:last-child {
+    margin-right: 0;
+}
+
+.apu-stat-label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.apu-stat-value {
+    display: block;
+    font-size: 24px;
+    line-height: 1.2;
+    color: #2271b1;
+}
+
+.apu-progress-container {
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.apu-progress-bar {
+    height: 20px;
+    background-color: #f0f0f1;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.apu-progress {
+    height: 100%;
+    background-color: #2271b1;
+    transition: width 0.3s ease;
+}
+
+.apu-progress-text {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    line-height: 20px;
+    color: #fff;
+    font-weight: 600;
+    text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+}
+
+.apu-message {
+    margin: 15px 0;
+    padding: 10px;
+    border-left: 4px solid #2271b1;
+    background: #f0f6fc;
+    display: none;
+}
+
+.apu-message.apu-error {
+    border-left-color: #d63638;
+    background: #fcf0f1;
+}
+
+.apu-message.apu-success {
+    border-left-color: #00a32a;
+    background: #f0fcf0;
+}
+
+.apu-actions {
+    margin-top: 20px;
+}
+
+.apu-log-container {
+    margin-top: 30px;
+}
+
+.apu-log {
+    background: #f0f0f1;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.apu-log-entry {
+    margin-bottom: 5px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #e2e4e7;
+}
+
+.apu-log-entry:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.apu-log-time {
+    color: #2271b1;
+    margin-right: 10px;
+}
+
+.apu-log-message {
+    color: #3c434a;
+}
+
+.apu-log-error {
+    color: #d63638;
+}
+
+.apu-log-success {
+    color: #00a32a;
+}
