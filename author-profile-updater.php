@@ -154,8 +154,9 @@ class Author_Profile_Updater {
         $offset = isset($_POST['offset']) ? intval($_POST['offset']) : 0;
         $limit = isset($_POST['limit']) ? intval($_POST['limit']) : 50;
         $force_update = isset($_POST['force_update']) && $_POST['force_update'] === 'true';
+        $update_type = isset($_POST['update_type']) ? sanitize_text_field($_POST['update_type']) : 'map_authors';
 
-        $result = $this->update_authors_batch($offset, $limit, $force_update);
+        $result = $this->update_authors_batch($offset, $limit, $force_update, $update_type);
 
         wp_send_json_success($result);
     }
@@ -183,24 +184,37 @@ class Author_Profile_Updater {
      * AJAX handler for updating a specific user
      */
     public function ajax_update_specific_user() {
-        check_ajax_referer('apu_nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('You do not have permission to perform this action.', 'author-profile-updater')]);
+        // Check nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'apu_nonce')) {
+            wp_send_json_error(array('message' => __('Security check failed.', 'author-profile-updater')));
         }
-        
+
+        // Check capabilities
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => __('You do not have permission to perform this action.', 'author-profile-updater')));
+        }
+
         $specific_user = isset($_POST['specific_user']) ? sanitize_text_field($_POST['specific_user']) : '';
         $match_type = isset($_POST['match_type']) ? sanitize_text_field($_POST['match_type']) : 'email';
         $force_update = isset($_POST['force_update']) && $_POST['force_update'] === 'true';
+        $update_type = isset($_POST['update_type']) ? sanitize_text_field($_POST['update_type']) : 'map_authors';
         
         if (empty($specific_user)) {
-            wp_send_json_error(['message' => __('No user specified.', 'author-profile-updater')]);
+            wp_send_json_error(array('message' => __('Please enter a specific user to update.', 'author-profile-updater')));
         }
         
-        $debug_info = [];
-        $debug_info['match_type'] = $match_type;
-        $debug_info['force_update'] = $force_update ? 'Yes' : 'No';
-        $debug_info['specific_user'] = $specific_user;
+        // Validate match type
+        if (!in_array($match_type, array('email', 'username', 'display_name'))) {
+            wp_send_json_error(array('message' => __('Invalid match type.', 'author-profile-updater')));
+        }
+        
+        // Initialize debug info
+        $debug_info = array(
+            'match_type' => $match_type,
+            'specific_user' => $specific_user,
+            'force_update' => $force_update ? 'Yes' : 'No',
+            'update_type' => $update_type
+        );
         
         // Get WP user based on match type
         $wp_user = null;
@@ -277,7 +291,22 @@ class Author_Profile_Updater {
             }
             
             // Update the author
-            $result = $this->update_author_user_id($author_id, $wp_user->ID);
+            $result = false;
+            
+            if ($update_type === 'sync_fields') {
+                // First ensure the author is mapped to the user
+                $map_result = $this->update_author_user_id($author_id, $wp_user->ID);
+                
+                // Then update the author data from the user
+                $result = $this->update_author_from_user($author_id, $wp_user->ID);
+                
+                $debug_info['authors'][$author_id]['update_type'] = 'Synced fields';
+            } else {
+                // Default behavior: just map the author to the user
+                $result = $this->update_author_user_id($author_id, $wp_user->ID);
+                
+                $debug_info['authors'][$author_id]['update_type'] = 'Mapped to user';
+            }
             
             if ($result) {
                 $updated_count++;
@@ -325,14 +354,15 @@ class Author_Profile_Updater {
     }
 
     /**
-     * Update authors batch
+     * Update a batch of authors
      *
      * @param int $offset
      * @param int $limit
      * @param bool $force_update
+     * @param string $update_type
      * @return array
      */
-    private function update_authors_batch($offset, $limit, $force_update) {
+    private function update_authors_batch($offset, $limit, $force_update, $update_type = 'map_authors') {
         $terms = get_terms(array(
             'taxonomy' => 'author',
             'hide_empty' => false,
@@ -384,43 +414,62 @@ class Author_Profile_Updater {
             $author_id = $term->term_id;
             $current_user_id = $this->get_author_user_id($author_id);
 
-            // Try multiple ways to get the email
-            $email = $this->get_author_email($author, $term->term_id, $debug_info['email_sources']);
-            
-            if (empty($email)) {
-                $debug_info['no_email']++;
-                $skipped++;
-                continue;
-            }
-            
-            // Get user by email (same approach as specific user update)
-            $wp_user = get_user_by('email', $email);
-            
-            if (!$wp_user) {
-                $debug_info['no_matching_user']++;
-                $skipped++;
-                continue;
-            }
-            
-            // Check if author is already mapped to a user
-            if ($current_user_id) {
-                if ($current_user_id == $wp_user->ID) {
-                    // Already mapped to the same user - update anyway
-                    $debug_info['already_mapped_same_user']++;
-                } else {
-                    // Already mapped to a different user
-                    $debug_info['already_mapped_different_user']++;
+            if ($update_type === 'sync_fields') {
+                // Skip if author is not mapped to a user
+                if (!$current_user_id) {
+                    $skipped++;
+                    continue;
                 }
-            }
-            
-            // Always update the author regardless of current mapping
-            $result = $this->update_author_user_id($author_id, $wp_user->ID);
-            
-            if ($result) {
-                $updated++;
-                $debug_info['updated']++;
+                
+                // Update the author data from the user
+                $result = $this->update_author_from_user($term->term_id, $current_user_id);
+                
+                if ($result) {
+                    $updated++;
+                    $debug_info['updated']++;
+                } else {
+                    $errors++;
+                }
             } else {
-                $errors++;
+                // Default behavior: map authors to users
+                // Try multiple ways to get the email
+                $email = $this->get_author_email($author, $term->term_id, $debug_info['email_sources']);
+                
+                if (empty($email)) {
+                    $debug_info['no_email']++;
+                    $skipped++;
+                    continue;
+                }
+                
+                // Get user by email (same approach as specific user update)
+                $wp_user = get_user_by('email', $email);
+                
+                if (!$wp_user) {
+                    $debug_info['no_matching_user']++;
+                    $skipped++;
+                    continue;
+                }
+                
+                // Check if author is already mapped to a user
+                if ($current_user_id) {
+                    if ($current_user_id == $wp_user->ID) {
+                        // Already mapped to the same user - update anyway
+                        $debug_info['already_mapped_same_user']++;
+                    } else {
+                        // Already mapped to a different user
+                        $debug_info['already_mapped_different_user']++;
+                    }
+                }
+                
+                // Always update the author regardless of current mapping
+                $result = $this->update_author_user_id($author_id, $wp_user->ID);
+                
+                if ($result) {
+                    $updated++;
+                    $debug_info['updated']++;
+                } else {
+                    $errors++;
+                }
             }
         }
 
@@ -428,20 +477,30 @@ class Author_Profile_Updater {
         $remaining = max(0, $remaining);
 
         // Create detailed debug message
-        $debug_message = sprintf(
-            __('Debug info: Already mapped (same user): %d, Already mapped (different user): %d, No email: %d, No matching user: %d, Updated: %d, Errors: %d | Email sources: term_meta_user_email: %d, term_meta_email: %d, author_email_property: %d, author_description: %d, author_meta_email: %d', 'author-profile-updater'),
-            $debug_info['already_mapped_same_user'],
-            $debug_info['already_mapped_different_user'],
-            $debug_info['no_email'],
-            $debug_info['no_matching_user'],
-            $debug_info['updated'],
-            $errors,
-            $debug_info['email_sources']['term_meta_user_email'],
-            $debug_info['email_sources']['term_meta_email'],
-            $debug_info['email_sources']['author_email_property'],
-            $debug_info['email_sources']['author_description'],
-            $debug_info['email_sources']['author_meta_email']
-        );
+        $debug_message = '';
+        if ($update_type === 'sync_fields') {
+            $debug_message = sprintf(
+                __('Debug info: Updated: %d, Skipped (not mapped to user): %d, Errors: %d', 'author-profile-updater'),
+                $debug_info['updated'],
+                $skipped,
+                $errors
+            );
+        } else {
+            $debug_message = sprintf(
+                __('Debug info: Already mapped (same user): %d, Already mapped (different user): %d, No email: %d, No matching user: %d, Updated: %d, Errors: %d | Email sources: term_meta_user_email: %d, term_meta_email: %d, author_email_property: %d, author_description: %d, author_meta_email: %d', 'author-profile-updater'),
+                $debug_info['already_mapped_same_user'],
+                $debug_info['already_mapped_different_user'],
+                $debug_info['no_email'],
+                $debug_info['no_matching_user'],
+                $debug_info['updated'],
+                $errors,
+                $debug_info['email_sources']['term_meta_user_email'],
+                $debug_info['email_sources']['term_meta_email'],
+                $debug_info['email_sources']['author_email_property'],
+                $debug_info['email_sources']['author_description'],
+                $debug_info['email_sources']['author_meta_email']
+            );
+        }
 
         return array(
             'updated' => $updated,
@@ -811,13 +870,18 @@ class Author_Profile_Updater {
             'Auto map guest authors to users by email',
             'author-profile-updater'
         );
+        
+        $bulk_actions['update_mapped_author_data'] = __(
+            'Sync author and user fields',
+            'author-profile-updater'
+        );
 
         return $bulk_actions;
     }
 
     public function handleBulkActions($redirect_to, $doaction, $post_ids)
     {
-        if ($doaction !== 'auto_map_to_user') {
+        if ($doaction !== 'auto_map_to_user' && $doaction !== 'update_mapped_author_data') {
             return $redirect_to;
         }
 
@@ -832,29 +896,54 @@ class Author_Profile_Updater {
 
             $author = $this->get_author_by_term_id($term->term_id);
 
-            if ($this->author_is_mapped_to_user($author)) {
-                continue;
-            }
+            if ($doaction === 'auto_map_to_user') {
+                if ($this->author_is_mapped_to_user($author)) {
+                    continue;
+                }
 
-            // Get author email from term meta
-            $email = get_term_meta($term->term_id, 'user_email', true);
-            
-            if (empty($email)) {
-                continue; // Skip if no email is set
-            }
+                // Get author email from term meta
+                $email = get_term_meta($term->term_id, 'user_email', true);
+                
+                if (empty($email)) {
+                    continue; // Skip if no email is set
+                }
 
-            $user = $this->get_user_matching_the_email($email);
+                $user = $this->get_user_matching_the_email($email);
 
-            if (is_object($user)) {
-                $this->map_author_to_user($term->term_id, $user->ID);
+                if (is_object($user)) {
+                    $this->map_author_to_user($term->term_id, $user->ID);
+                    $count++;
+                }
+            } elseif ($doaction === 'update_mapped_author_data') {
+                // Skip if author is not mapped to a user
+                if (!$this->author_is_mapped_to_user($author)) {
+                    continue;
+                }
+                
+                // Get the user ID
+                $user_id = $this->get_author_user_id($term->term_id);
+                
+                if (!$user_id) {
+                    continue;
+                }
+                
+                // Update the author data from the user
+                $this->update_author_from_user($term->term_id, $user_id);
                 $count++;
             }
+        }
+
+        $message = '';
+        if ($doaction === 'auto_map_to_user') {
+            $message = sprintf(__('Mapped %d authors to users.', 'author-profile-updater'), $count);
+        } elseif ($doaction === 'update_mapped_author_data') {
+            $message = sprintf(__('Synced %d authors with their mapped users.', 'author-profile-updater'), $count);
         }
 
         $redirect_to = add_query_arg(
             array(
                 'bulk_action_result' => $count,
-                'bulk_action_message' => sprintf(__('Updated %d authors.', 'author-profile-updater'), $count)
+                'bulk_action_message' => $message
             ),
             $redirect_to
         );
@@ -901,6 +990,58 @@ class Author_Profile_Updater {
         $data_structure .= 'Author Object Properties: ' . print_r($author_properties, true) . "\n";
 
         return $data_structure;
+    }
+
+    /**
+     * Update author data from user
+     *
+     * @param int $term_id The author term ID
+     * @param int $user_id The user ID to get data from
+     * @return bool True on success, false on failure
+     */
+    private function update_author_from_user($term_id, $user_id) {
+        $user = get_user_by('id', (int)$user_id);
+
+        if (empty($user) || is_wp_error($user)) {
+            return false;
+        }
+
+        // Update the term slug to match the user's nicename
+        wp_update_term(
+            $term_id,
+            'author',
+            [
+                'slug' => $user->user_nicename,
+            ]
+        );
+
+        // Clone applicable user fields to term meta
+        $user_fields = [
+            'first_name',
+            'last_name',
+            'user_email',
+            'user_login',
+            'user_url',
+            'description',
+        ];
+        
+        // Update the user_id meta (to ensure it's set)
+        update_term_meta($term_id, 'user_id', $user->ID);
+        
+        // Update all the user fields
+        foreach ($user_fields as $field) {
+            update_term_meta($term_id, $field, $user->$field);
+        }
+        
+        // If PublishPress Authors is active, try to use its method
+        if (class_exists('\MultipleAuthors\Classes\Objects\Author')) {
+            // Try to use the static method if it exists
+            if (method_exists('\MultipleAuthors\Classes\Objects\Author', 'update_author_from_user')) {
+                \MultipleAuthors\Classes\Objects\Author::update_author_from_user($term_id, $user_id);
+            }
+        }
+        
+        return true;
     }
 }
 

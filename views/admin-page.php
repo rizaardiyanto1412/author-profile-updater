@@ -57,6 +57,38 @@ if (!defined('ABSPATH')) {
             
             <hr class="apu-divider">
             
+            <div class="apu-sync-author-data-section">
+                <h3><?php echo esc_html__('Sync Author and User Fields', 'author-profile-updater'); ?></h3>
+                <p><?php echo esc_html__('Update author fields with data from their mapped WordPress users. This will sync fields like name, email, URL, and description.', 'author-profile-updater'); ?></p>
+                
+                <div class="apu-sync-author-form">
+                    <div class="apu-form-row">
+                        <label for="apu-sync-specific-user"><?php echo esc_html__('User Email or Username:', 'author-profile-updater'); ?></label>
+                        <input type="text" id="apu-sync-specific-user" class="regular-text" placeholder="<?php echo esc_attr__('e.g., user@example.com or username', 'author-profile-updater'); ?>">
+                    </div>
+                    <div class="apu-form-row">
+                        <label for="apu-sync-match-type"><?php echo esc_html__('Match Type:', 'author-profile-updater'); ?></label>
+                        <select id="apu-sync-match-type">
+                            <option value="email"><?php echo esc_html__('Email', 'author-profile-updater'); ?></option>
+                            <option value="username"><?php echo esc_html__('Username', 'author-profile-updater'); ?></option>
+                            <option value="display_name"><?php echo esc_html__('Display Name', 'author-profile-updater'); ?></option>
+                        </select>
+                    </div>
+                    <div class="apu-form-row">
+                        <label for="apu-sync-force-update"><?php echo esc_html__('Force Update:', 'author-profile-updater'); ?></label>
+                        <input type="checkbox" id="apu-sync-force-update">
+                        <span class="apu-checkbox-description"><?php echo esc_html__('Update authors even if already mapped to a different user', 'author-profile-updater'); ?></span>
+                    </div>
+                    <div class="apu-form-row">
+                        <button type="button" class="button button-secondary" id="apu-sync-specific-button"><?php echo esc_html__('Sync Author Data', 'author-profile-updater'); ?></button>
+                    </div>
+                </div>
+                
+                <div class="apu-sync-result" id="apu-sync-result"></div>
+            </div>
+            
+            <hr class="apu-divider">
+            
             <h3><?php echo esc_html__('Bulk Update All Authors', 'author-profile-updater'); ?></h3>
             
             <div class="apu-stats">
@@ -78,6 +110,14 @@ if (!defined('ABSPATH')) {
                 <label for="apu-bulk-force-update"><?php echo esc_html__('Force Update:', 'author-profile-updater'); ?></label>
                 <input type="checkbox" id="apu-bulk-force-update">
                 <span class="apu-checkbox-description"><?php echo esc_html__('Update authors even if already mapped to a user', 'author-profile-updater'); ?></span>
+            </div>
+            
+            <div class="apu-form-row">
+                <label for="apu-bulk-update-type"><?php echo esc_html__('Update Type:', 'author-profile-updater'); ?></label>
+                <select id="apu-bulk-update-type">
+                    <option value="map_authors"><?php echo esc_html__('Map authors to users by email', 'author-profile-updater'); ?></option>
+                    <option value="sync_fields"><?php echo esc_html__('Sync author and user fields (for already mapped authors)', 'author-profile-updater'); ?></option>
+                </select>
             </div>
             
             <div class="apu-progress-container">

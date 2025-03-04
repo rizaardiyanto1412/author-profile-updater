@@ -37,13 +37,22 @@
         APU.$updateSpecificButton = $('#apu-update-specific-button');
         APU.$specificResult = $('#apu-specific-result');
         
+        // Sync author data elements
+        APU.$syncSpecificUser = $('#apu-sync-specific-user');
+        APU.$syncMatchType = $('#apu-sync-match-type');
+        APU.$syncForceUpdate = $('#apu-sync-force-update');
+        APU.$syncSpecificButton = $('#apu-sync-specific-button');
+        APU.$syncResult = $('#apu-sync-result');
+        
         // Bulk update elements
         APU.$bulkForceUpdate = $('#apu-bulk-force-update');
+        APU.$bulkUpdateType = $('#apu-bulk-update-type');
 
         // Bind events
         APU.$startButton.on('click', APU.startUpdate);
         APU.$stopButton.on('click', APU.stopUpdate);
         APU.$updateSpecificButton.on('click', APU.updateSpecificUser);
+        APU.$syncSpecificButton.on('click', APU.syncSpecificUser);
 
         // Get initial authors count
         APU.getAuthorsCount();
@@ -163,6 +172,7 @@
         APU.stopRequested = false;
         APU.updatedAuthors = 0;
         APU.offset = 0;
+        APU.updateType = APU.$bulkUpdateType.val();
         
         // Update UI
         APU.$startButton.prop('disabled', true);
@@ -172,7 +182,7 @@
         APU.$progressText.text('0%');
         APU.showMessage('', '');
         
-        APU.log('Starting update process...');
+        APU.log('Starting update process... (Type: ' + APU.updateType + ')');
         
         // Start the update process
         APU.processNextBatch();
@@ -211,7 +221,8 @@
                 nonce: apuData.nonce,
                 offset: APU.offset,
                 limit: APU.batchSize,
-                force_update: forceUpdate ? 'true' : 'false'
+                force_update: forceUpdate ? 'true' : 'false',
+                update_type: APU.updateType
             },
             success: function(response) {
                 if (response.success) {
@@ -328,6 +339,97 @@
         
         $entry.append($time).append($message);
         APU.$log.prepend($entry);
+    };
+
+    /**
+     * Sync author data for a specific user
+     */
+    APU.syncSpecificUser = function() {
+        var specificUser = APU.$syncSpecificUser.val().trim();
+        var matchType = APU.$syncMatchType.val();
+        var forceUpdate = APU.$syncForceUpdate.is(':checked');
+        
+        if (!specificUser) {
+            APU.showSyncResult('Please enter an email address or username.', 'error');
+            return;
+        }
+        
+        APU.log('Syncing author data for user: ' + specificUser + ' (Match type: ' + matchType + ', Force update: ' + forceUpdate + ')');
+        APU.showSyncResult('Syncing author data...', 'info');
+        
+        APU.$syncSpecificButton.prop('disabled', true).text('Syncing...');
+        
+        $.ajax({
+            url: apuData.ajaxUrl,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                action: 'apu_update_specific_user',
+                nonce: apuData.nonce,
+                specific_user: specificUser,
+                match_type: matchType,
+                force_update: forceUpdate,
+                update_type: 'sync_fields'
+            },
+            success: function(response) {
+                APU.$syncSpecificButton.prop('disabled', false).text('Sync Author Data');
+                
+                if (response.success) {
+                    var message = response.data.message;
+                    APU.showSyncResult(message, 'success');
+                    APU.log(message);
+                    
+                    // Show debug info if available
+                    if (response.data.debug) {
+                        var debugInfo = response.data.debug;
+                        var debugHtml = '<div class="apu-debug-info">';
+                        
+                        debugHtml += '<h4>Debug Information</h4>';
+                        
+                        if (debugInfo.wp_user_found === 'Yes') {
+                            debugHtml += '<p>WordPress User: Found (ID: ' + debugInfo.wp_user_id + ', Email: ' + debugInfo.wp_user_email + ')</p>';
+                        } else {
+                            debugHtml += '<p>WordPress User: Not found</p>';
+                        }
+                        
+                        if (debugInfo.authors_found === 'Yes') {
+                            debugHtml += '<p>Authors: Found (' + debugInfo.total_authors + ' total, ' + debugInfo.match_summary.total_matches + ' matches)</p>';
+                            
+                            if (debugInfo.match_summary.total_matches > 0) {
+                                debugHtml += '<ul>';
+                                $.each(debugInfo.authors, function(authorId, authorData) {
+                                    if (authorData.match_found === 'Yes') {
+                                        debugHtml += '<li>Author #' + authorId + ' (' + authorData.term_name + '): ' + authorData.action + ' - ' + authorData.update_result + '</li>';
+                                    }
+                                });
+                                debugHtml += '</ul>';
+                            }
+                        } else {
+                            debugHtml += '<p>Authors: None found</p>';
+                        }
+                        
+                        debugHtml += '</div>';
+                        APU.$syncResult.append(debugHtml);
+                    }
+                } else {
+                    APU.showSyncResult(response.data.message, 'error');
+                    APU.log('Error: ' + response.data.message, 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                APU.$syncSpecificButton.prop('disabled', false).text('Sync Author Data');
+                APU.showSyncResult('AJAX error: ' + error, 'error');
+                APU.log('AJAX error: ' + error, 'error');
+            }
+        });
+    };
+    
+    /**
+     * Show sync result
+     */
+    APU.showSyncResult = function(message, type) {
+        var className = 'apu-message-' + (type || 'info');
+        APU.$syncResult.html('<div class="' + className + '">' + message + '</div>');
     };
 
     // Initialize when document is ready
