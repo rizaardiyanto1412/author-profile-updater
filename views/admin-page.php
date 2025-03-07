@@ -81,7 +81,93 @@ if (!defined('ABSPATH')) {
                     </div>
                     <div class="apu-form-row">
                         <button type="button" class="button button-secondary" id="apu-sync-specific-button"><?php echo esc_html__('Sync Author Data', 'author-profile-updater'); ?></button>
+                        <!-- Alternative button with inline onclick handler -->
+                        <button type="button" class="button button-primary" onclick="syncAuthorDataDirect()"><?php echo esc_html__('Sync Author Data (Alt)', 'author-profile-updater'); ?></button>
                     </div>
+                    
+                    <!-- Add inline script for direct function -->
+                    <script type="text/javascript">
+                    function syncAuthorDataDirect() {
+                        console.log("Direct sync function called");
+                        
+                        // Get form values directly
+                        var specificUser = document.getElementById("apu-sync-specific-user").value.trim();
+                        var matchTypeSelect = document.getElementById("apu-sync-match-type");
+                        var matchType = matchTypeSelect ? matchTypeSelect.value : "email";
+                        var forceUpdate = document.getElementById("apu-sync-force-update").checked;
+                        
+                        console.log("Form values:", {
+                            specificUser: specificUser,
+                            matchType: matchType,
+                            forceUpdate: forceUpdate
+                        });
+                        
+                        if (!specificUser) {
+                            alert("Please enter an email address or username.");
+                            return;
+                        }
+                        
+                        // Show status
+                        var resultDiv = document.getElementById("apu-sync-result");
+                        if (resultDiv) {
+                            resultDiv.innerHTML = "<div class='apu-message-info'>Syncing author data...</div>";
+                        }
+                        
+                        // Disable button
+                        var button = event.target;
+                        button.disabled = true;
+                        button.textContent = "Syncing...";
+                        
+                        // Make AJAX request using vanilla JS
+                        var xhr = new XMLHttpRequest();
+                        xhr.open("POST", "<?php echo admin_url('admin-ajax.php'); ?>", true);
+                        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                        
+                        xhr.onreadystatechange = function() {
+                            if (xhr.readyState === 4) {
+                                button.disabled = false;
+                                button.textContent = "Sync Author Data (Alt)";
+                                
+                                if (xhr.status === 200) {
+                                    try {
+                                        var response = JSON.parse(xhr.responseText);
+                                        console.log("AJAX response:", response);
+                                        
+                                        if (response.success) {
+                                            if (resultDiv) {
+                                                resultDiv.innerHTML = "<div class='apu-message-success'>" + response.data.message + "</div>";
+                                            }
+                                            alert("Success: " + response.data.message);
+                                        } else {
+                                            if (resultDiv) {
+                                                resultDiv.innerHTML = "<div class='apu-message-error'>" + response.data.message + "</div>";
+                                            }
+                                            alert("Error: " + response.data.message);
+                                        }
+                                    } catch (e) {
+                                        console.error("Error parsing JSON:", e);
+                                        alert("Error parsing response from server");
+                                    }
+                                } else {
+                                    console.error("AJAX error:", xhr.status, xhr.statusText);
+                                    alert("AJAX error: " + xhr.status + " " + xhr.statusText);
+                                }
+                            }
+                        };
+                        
+                        // Prepare data
+                        var data = 
+                            "action=apu_update_specific_user" + 
+                            "&nonce=<?php echo wp_create_nonce('apu_nonce'); ?>" + 
+                            "&specific_user=" + encodeURIComponent(specificUser) + 
+                            "&match_type=" + encodeURIComponent(matchType) + 
+                            "&force_update=" + (forceUpdate ? "true" : "false") + 
+                            "&update_type=sync_fields";
+                        
+                        console.log("Sending data:", data);
+                        xhr.send(data);
+                    }
+                    </script>
                 </div>
                 
                 <div class="apu-sync-result" id="apu-sync-result"></div>

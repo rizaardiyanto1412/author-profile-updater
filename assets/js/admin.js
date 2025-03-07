@@ -19,6 +19,7 @@
      * Initialize the admin page
      */
     APU.init = function() {
+        console.log('APU Init starting');
         // Cache DOM elements
         APU.$startButton = $('#apu-start-button');
         APU.$stopButton = $('#apu-stop-button');
@@ -42,6 +43,7 @@
         APU.$syncMatchType = $('#apu-sync-match-type');
         APU.$syncForceUpdate = $('#apu-sync-force-update');
         APU.$syncSpecificButton = $('#apu-sync-specific-button');
+        console.log('Sync button found:', APU.$syncSpecificButton.length > 0);
         APU.$syncResult = $('#apu-sync-result');
         
         // Bulk update elements
@@ -52,7 +54,26 @@
         APU.$startButton.on('click', APU.startUpdate);
         APU.$stopButton.on('click', APU.stopUpdate);
         APU.$updateSpecificButton.on('click', APU.updateSpecificUser);
-        APU.$syncSpecificButton.on('click', APU.syncSpecificUser);
+        
+        // Add direct click handler for sync button
+        if (APU.$syncSpecificButton.length > 0) {
+            console.log('Adding click handler to sync button');
+            APU.$syncSpecificButton.on('click', function() {
+                console.log('Sync button clicked');
+                APU.syncSpecificUser();
+            });
+        } else {
+            console.error('Sync button not found in DOM');
+            // Try alternative selector
+            var altButton = document.getElementById('apu-sync-specific-button');
+            if (altButton) {
+                console.log('Found button with direct DOM query');
+                $(altButton).on('click', function() {
+                    console.log('Alt sync button clicked');
+                    APU.syncSpecificUser();
+                });
+            }
+        }
 
         // Get initial authors count
         APU.getAuthorsCount();
@@ -345,11 +366,27 @@
      * Sync author data for a specific user
      */
     APU.syncSpecificUser = function() {
+        console.log('syncSpecificUser function called');
+        
+        // Check if jQuery elements exist
+        if (!APU.$syncSpecificUser || APU.$syncSpecificUser.length === 0) {
+            console.error('syncSpecificUser element not found');
+            APU.showSyncResult('Error: Form elements not found. Please refresh the page and try again.', 'error');
+            return;
+        }
+        
         var specificUser = APU.$syncSpecificUser.val().trim();
         var matchType = APU.$syncMatchType.val();
         var forceUpdate = APU.$syncForceUpdate.is(':checked');
         
+        console.log('Form values:', {
+            specificUser: specificUser,
+            matchType: matchType,
+            forceUpdate: forceUpdate
+        });
+        
         if (!specificUser) {
+            console.log('No specific user entered');
             APU.showSyncResult('Please enter an email address or username.', 'error');
             return;
         }
@@ -358,6 +395,16 @@
         APU.showSyncResult('Syncing author data...', 'info');
         
         APU.$syncSpecificButton.prop('disabled', true).text('Syncing...');
+        
+        // Check if AJAX URL and nonce are defined
+        if (!apuData || !apuData.ajaxUrl) {
+            console.error('apuData or ajaxUrl not defined');
+            APU.showSyncResult('Error: AJAX configuration missing.', 'error');
+            APU.$syncSpecificButton.prop('disabled', false).text('Sync Author Data');
+            return;
+        }
+        
+        console.log('Making AJAX request to:', apuData.ajaxUrl);
         
         $.ajax({
             url: apuData.ajaxUrl,
@@ -372,6 +419,7 @@
                 update_type: 'sync_fields'
             },
             success: function(response) {
+                console.log('AJAX success:', response);
                 APU.$syncSpecificButton.prop('disabled', false).text('Sync Author Data');
                 
                 if (response.success) {
@@ -381,6 +429,7 @@
                     
                     // Show debug info if available
                     if (response.data.debug) {
+                        console.log('Debug info:', response.data.debug);
                         var debugInfo = response.data.debug;
                         var debugHtml = '<div class="apu-debug-info">';
                         
@@ -412,11 +461,13 @@
                         APU.$syncResult.append(debugHtml);
                     }
                 } else {
+                    console.warn('AJAX response error:', response.data);
                     APU.showSyncResult(response.data.message, 'error');
                     APU.log('Error: ' + response.data.message, 'error');
                 }
             },
             error: function(xhr, status, error) {
+                console.error('AJAX error:', {xhr: xhr, status: status, error: error});
                 APU.$syncSpecificButton.prop('disabled', false).text('Sync Author Data');
                 APU.showSyncResult('AJAX error: ' + error, 'error');
                 APU.log('AJAX error: ' + error, 'error');
@@ -433,6 +484,66 @@
     };
 
     // Initialize when document is ready
-    $(document).ready(APU.init);
+    $(document).ready(function() {
+        // Initialize APU
+        APU.init();
+        
+        // Add direct event handler for sync button
+        console.log('Adding direct event handler for sync button');
+        $('#apu-sync-specific-button').on('click', function(e) {
+            console.log('Direct sync button click handler triggered');
+            e.preventDefault();
+            
+            // Get form values directly
+            var specificUser = $('#apu-sync-specific-user').val().trim();
+            var matchType = $('#apu-sync-match-type').val();
+            var forceUpdate = $('#apu-sync-force-update').is(':checked');
+            
+            console.log('Form values (direct):', {
+                specificUser: specificUser,
+                matchType: matchType,
+                forceUpdate: forceUpdate
+            });
+            
+            if (!specificUser) {
+                alert('Please enter an email address or username.');
+                return;
+            }
+            
+            // Disable button and show status
+            var $button = $(this);
+            $button.prop('disabled', true).text('Syncing...');
+            
+            // Make AJAX request
+            $.ajax({
+                url: apuData.ajaxUrl,
+                type: 'POST',
+                dataType: 'json',
+                data: {
+                    action: 'apu_update_specific_user',
+                    nonce: apuData.nonce,
+                    specific_user: specificUser,
+                    match_type: matchType,
+                    force_update: forceUpdate,
+                    update_type: 'sync_fields'
+                },
+                success: function(response) {
+                    console.log('Direct AJAX success:', response);
+                    $button.prop('disabled', false).text('Sync Author Data');
+                    
+                    if (response.success) {
+                        alert('Success: ' + response.data.message);
+                    } else {
+                        alert('Error: ' + response.data.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Direct AJAX error:', error);
+                    $button.prop('disabled', false).text('Sync Author Data');
+                    alert('AJAX error: ' + error);
+                }
+            });
+        });
+    });
 
 })(jQuery);
